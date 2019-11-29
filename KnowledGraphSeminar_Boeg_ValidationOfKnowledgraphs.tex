@@ -1,0 +1,481 @@
+% This is samplepaper.tex, a sample chapter demonstrating the
+% LLNCS macro package for Springer Computer Science proceedings;
+% Version 2.20 of 2017/10/04
+%
+\documentclass[runningheads]{llncs}
+%
+\usepackage{graphicx}
+\usepackage{syntax}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{comment}
+\usepackage{listings}
+
+\begin{document}
+\title{KG seminar - Validation of Knowledge Graphs: SHACL, ShEx and Friends}
+\titlerunning{Validation of Knowledge Graphs}
+\author{Merlin B\"ogershausen - 317962 - \email{merlin.boegershausen@rwth-aachen.de}}
+\authorrunning{M. B\"ogershausen}
+\institute{RWTH Aachen University\\Templergraben 55\\52062 Aachen}
+%
+\maketitle              % typeset the header of the contribution
+%
+\begin{abstract}
+    Knowledge graphs are used in all kind of industrial and academical environments to store and work with knowledge.
+    Knowledge and RDF are diversified techniques, to gain better knowledge from them, we need merging and validation as first steps in our workflows.
+    
+    RDF does not have a default or recommended way to do such validation, therefore some promising approaches are appearing.
+    But none of them is familiar to the widely know Object Constraint Language, which is the quasi-standard tool for constraint definition.
+
+    We will show how transformation from OCL to SPARQL Inference Modeling, Shape Constraints and Shape Expressions can be done, to open this technique to the UML trained software developer and architects.
+    \keywords{Knowledge Graph \and Data Validation \and Automation}
+\end{abstract}
+% ########################################T#########################################################################
+% ######################################### Intro #################################################################
+% #################################################################################################################
+\section{Introduction}
+Knowledge graphs gaining more and more attention in the last few years, due to the growing amount of information spread around the world wide web.
+With the recommendation of the Resource Description Framework (RDF) by the W3C, the way to receive and populate such information is getting standardized.
+
+RDF stores information in a describing way, by paring an object with property and value.
+The objects and properties are IRIs and the value can be an IRI or literal, usually out of the standard XSD namespace.
+This pair is named a \textit{Triple} and describes an arc in a labelled directed graph, the \textit{RDF-Graph}.
+
+Using RDF as the base of data exchange in a workflow leads us to various problems \cite{sadiq2004data}.
+Miss matched data and missing data are likely to be present if the source graph uses another or unexpected structure.
+In this case, no information may be found and due to the open-world assumption, no errors will be raised.
+Therefore, validation is needed to prevent the workflow from unknown behaviour.
+
+The classic framework for modelling and validation in software development provides us with all features to tackle and solve this problem, by using the Object Constraint Language (OCL).
+The validation with such constraints is normally done by adding assertions/checks at code generation, but RDF does not provide such feature natively.
+
+In this paper, we will show how the translation from OCL into some of the upraising RDF validation languages, can be done.
+For this, we give a short overview of OCL and find some metric in Section 2.
+In Section 3 we show how OCL can be translated into SPARQL Inference Notation (SPIN), Shape Constraint Language (SHACL) and Shape Expressions (ShEx) by defining such translation functions and combining them to one.
+In Section 4 we will see the differences of the three approaches.
+% #################################################################################################################
+% ########################################## Basics ###############################################################
+% #################################################################################################################
+\section{Basic Knowledge}
+\subsection{Object Constraint Language}
+The Object Management Group is a consortium that produces and maintain specifications for enterprise applications, like the widely known and used Unified Modeling Language (UML).
+As part of UML, the Object Constraint Language was developed to provide the ability to formulate statements about the structure of data and to specify the input and output of functions \cite{ocl24}.
+Therefore OCL defines various expression types, but not all are needed to validate the data integrity.
+
+In this paper, we will focus on the invariant feature of OCL, with which conditions can be defined that have to hold for the whole life span of the data.
+\subsection{OCL Expressions}\label{OCLINVSubSet}
+Invariants are OCL Expressions, so we will use a sub grammar of the OCL grammar which meets our requirements, the full grammar can be seen in \cite{ocl24}.
+
+\textit{Primitive Type Expressions} are used to define which range or specific type value must-have.
+All basic datatypes are covered, like Integer, Real and UnlimitedNatural for all numerical values, Boolean and String as usual.
+The Null expression is used to cover all invariants containing a null statement.
+
+\textit{Variable Expressions} are used for declaring on which variable the invariant must hold.
+Therefore, a self-pointer or every other String, except the OCL keywords are allowed.
+This expression is used in other expressions.
+
+\textit{Let Expressions} define a variable with which further, more complex validation can be done.
+This expression does not influence any value in the data.
+
+\textit{Collection Literal Expressions} are used to write invariants about a collection of values.
+
+The expressions mentioned above can be represented with the union of the sets below.
+\begin{enumerate}
+    \item \(\textsc{IfEXP}:=\textsc{OCLExpression} \times \textsc{OCLExpression} \times \textsc{OCLExpression}\)
+    \item \(\textsc{PrimitivTypeEXP}:= \textsc{IntegerEXP} \cup \textsc{RealEXP} \cup \textsc{BooleanEXP} \cup \textsc{UnlimitedNatrualEXP} \cup \textsc{NullEXP} \)
+    \item \(\textsc{VariableEXP}:="self" \cup (\textsc{String}\setminus\textsc{OCLKeywords})\)
+    \item \(\textsc{LetEXP}:=\textsc{DeclareEXP} \times \textsc{OCLExpression}\)
+    \item \(\textsc{DeclareEXP}:=\textsc{String} \times \textsc{DataType} \times \textsc{OCLExpression}\)
+    \item \(\textsc{DataType}:=\textsc{OCLType} \cup \textsc{SelfDefinedType}\)
+    \item \(\textsc{CollectionLiteralEXP}:=\textsc{CollectionTyp}\times\{\textsc{OCLExpression}^*\}\)
+\end{enumerate}
+\subsection{Metrics for RDF Validation Frameworks}\label{metrics}
+The ongoing research about the RDF validation topic gave us some requirements \cite{tomaszuk2017rdf} for a validation language, which are not suitable for our purpose.
+
+We need some other metrics to validate the given approaches, these will be the following three.
+\begin{enumerate}
+    \item feature coverage for data value validation
+    \item feature coverage for data structure validation
+    \item human readability of the resulting constraints
+\end{enumerate}
+\section{From OCL to RDF validation framework}
+\label{OCL2RDFVal}
+Now we give the translation relations from OCL to SPIN, SHACL and ShEx by combining sub-feature translation relations.
+% #################################################################################################################
+% #################################################### SPIN #######################################################
+% #################################################################################################################
+\subsection{Translation from OCL to SPIN}
+The RDF SPIN vocabulary provides RDF properties to represent SPARQL queries with the RDF triple notation, this enables storing and reusing of queries and rule propagation to other endpoints \cite{knublauch2014spin}.
+
+The whole validation magic will take place in the where clause of a SPIN ASK Query.
+In this section, we only give the SPARQL queries and not the SPIN vocabulary notation.
+
+We will see \textsc{SPINWhere} which is the set of all valid SPIN where clauses.
+\subsubsection{PrimitivTypeEXP} will be mapped to a pair of a triple clause and a FILTER clause, where the compare operator mapping \(\sigma_{op}\) is used.
+For this, we bind the concrete value to a variable, which later will be compared.
+\begin{definition}[PrimitivTypeEXP to SPIN Transformation]
+    \begin{align*}
+        \sigma_{PT}\colon\textsc{PrimitivTypeEXP} & \to\textsc{SPINWhere}                                               \\
+        \sigma_{PT}((n, o, v))                    & \mapsto \$\text{this ?n ?val. FILTER(}\sigma_{op}(val,o)\text{ v).}
+    \end{align*}
+\end{definition}
+\subsubsection{Basic Operators}
+need to be mapped for each datatype individually.
+This makes the relation very huge, we choose a table for visualization.
+\begin{definition}[OCL to SPIN Transformation of basic Operators]
+    \begin{align*}
+        \sigma_{op}\colon\textsc{OCLOperator}\times\textsc{OCLObjects} & \to\textsc{SPINOperator} \\
+        OP_{OCL}                                                       & \mapsto OP_{SPIN}
+    \end{align*}
+\end{definition}
+Where \(OP_{OCL}\) and \(OP_{SPIN}\) have the non trivial mapping seen in Tables \ref{OpMapSPIN1}, \ref{OpMapSPIN2}, \ref{OpMapSPIN3}.
+\begin{table}[h]
+    \centering
+    \begin{tabular}{|l|l|l|l|}
+        \hline
+        \multicolumn{2}{|    c|}{\textbf{Integer}} & \multicolumn{2}{c|}{\textbf{Real}}                                \\
+        \(OP_{OCL}\)                           & \(OP_{SPIN}\)                      & \(OP_{OCL}\) & \(OP_{SPIN}\) \\ \hline
+        a.div(b)                               & a/b                                & a/b          & a/b           \\
+        a.mod(b)                               & FLOOR(a-(b*FLOOR(a/b))             & a.floor()    & FLOOR(a)      \\
+        a.abs()                                & ABS(a)                             & a.round()    & ROUND(a)      \\
+        a.max(b)                               & MAX(a,b)                           & a.max(b)     & MX(a,b)       \\
+        a.min(b)                               & MIN(a,b)                           & a.min(b)     & MIN(a,b)      \\\hline
+    \end{tabular}
+    \caption{Operator mapping for numerical values}
+    \label{OpMapSPIN1}
+    \begin{tabular}{|l|l|l|l|l|l|}
+        \hline
+        \multicolumn{2}{|c|}{\textbf{Boolean}} & \multicolumn{2}{c|}{\textbf{String}}                                     \\
+        \(OP_{OCL}\)                           & \(OP_{SPIN}\)                        & \(OP_{OCL}\)     & \(OP_{SPIN}\)  \\\hline
+        not a                                  & !a                                   & a.size()         & STRLEN(a)      \\
+        a and b                                & a \(\&\&\) b                         & a.concat(b)      & CONCAT(a,b)    \\
+        a or b                                 & a \(\|\) b                           & a.substring(i,j) & SUBSTR(a,i,j)  \\
+        a xor b                                & (!a \(\&\&\) b)\(\|\)(a \(\&\&\) !b) & a.toUpper()      & UCASE(a)       \\
+        a implies b                            & a \(\&\&\) !b                        & a.toLower()      & LCASE(a)       \\
+                                               &                                      & a.toInteger()    & xsd:integer(a) \\
+                                               &                                      & a.toReal()       & xsd:decimal(a) \\\hline
+    \end{tabular}
+    \caption{Operator mapping for Boolean and string values}
+    \label{OpMapSPIN2}
+    \begin{tabular}{|l|l|}
+        \hline
+        \multicolumn{2}{|c|}{\textbf{Object}}                \\
+        \hline
+        x.oclTypeOf(c) & \$this x/rdf:type c.                \\
+        x.oclKindOf(c) & \$this x/rdf:type/rdfsSubClassOf* c \\
+        \hline
+    \end{tabular}
+    \caption{Operator mapping for all objects}
+    \label{OpMapSPIN3}
+\end{table}
+\subsubsection{IfEXP}
+cannot be covert native with SPIN, so we use the logical or/and approach.
+This conditioning then will be parsed into an equivalent FILTER clause.
+\begin{definition}[IfEXP to SPIN Transformation]
+    \begin{align*}
+        \sigma_{IF}\colon\textsc{IfEXP} & \to\textsc{SPINWhere}                                                \\
+        (e_1, e_2, e_3)                 & \mapsto\text{FILTER( (e_1 \(\&\&\) e_2) \(\|\) (!e1 \(\&\&\) e_2)).} \\
+    \end{align*}
+\end{definition}
+\subsubsection{CollectionLiteralEXP}
+are all needed to be mapped, so this produces a huge mapping, so we choose a table for non the trivial mappings.
+\begin{definition}[OCL to SPIN Transformation of CollectionLiteralEXP]
+    \begin{align*}
+        \sigma_{COL}\colon\textsc{CollectionLiteralEXP} & \to\textsc{SPINExpression} \\
+        \sigma_{COL}(e_{ocl})                           & \mapsto e_{SPIN}
+    \end{align*}
+\end{definition}
+The mapping can be seen in Table \ref{OCLCollectionSPIN}.
+\begin{table}[h]
+    \centering
+    \begin{tabular}{|l|l|}
+        \hline
+        \textbf{e_{OCL}}            & \textbf{e_{SPIN}}                           \\\hline
+        x.size()                    & SELECT COUNT(?x) AS ?count \{\$this ?x ?v\} \\
+        a.includes(x)               & ASK \{\$this ?a ?x\}                        \\
+        a.excludes(x)               & ASK NOT EXIST \{\$this ?a ?x\}              \\
+        count x                     & SELECT COUNT(?v) AS ?count \{\$this ?x ?v\} \\
+        a.includeAll(\(x_1 .. x_n\) & ASK \{\$this ?a ?x_1; .. ?a ?x_n\}          \\
+        a.excludeAll(\(x_1 .. x_n\) &                                             \\
+        a.isEmpty                   & \textit{empty set is not present in RDF}    \\
+        a.notEmpty                  & ASK \{\$this ?a ?x\}                        \\
+        max x                       & BIND(MAX(?v) AS max)                        \\
+        min x                       & BIND(MIN(?v) AS min)                        \\
+        sum x                       & BIND(SUM(?v) AS sum)                        \\
+        product                     & ERROR                                       \\
+        selectByKind(c)             & SELECT ?s \{?s rdfs:subClassOf* ?c\}        \\
+        selectByType(c)             & SELECT ?s \{?s rdf:type ?c\}                \\
+        flattern                    & ERROR                                       \\\hline
+    \end{tabular}
+    \caption{OCL Collection based operation to SPIN}
+    \label{OCLCollectionSPIN}
+\end{table}
+\subsubsection{OCLExpression translation}
+are a combination of the defined translation relations we seen above, with which we can map all OCĹ Constraints from Section \ref{OCLINVSubSet}.
+\begin{definition}[OCL to SPIN translation]
+    \begin{align*}
+        \sigma_{SPIN}\colon\textsc{OCLExpression} & \to\textsc{SPINExpression} \\
+        \sigma_{SPIN}(e)                          & \mapsto
+        \begin{cases}
+            \sigma_{IF}(e)  & \quad , e \in \textsc{IfExpression}           \\
+            \sigma_{Let}(e) & \quad , e \in \textsc{LetExpression}          \\
+            \sigma_{PT}(e)  & \quad , e \in \textsc{PrimitivTypeExpression} \\
+            \sigma_{Col}(e) & \quad , e \in \textsc{CollectionLiteralEXP}
+        \end{cases}
+    \end{align*}
+    \label{OCLtoSPIN}
+\end{definition}
+% #################################################################################################################
+% ################################################### SHACL #######################################################
+% #################################################################################################################
+\subsection{Translation from OCL to SHACL}
+SHACL is meant to be the successor of SPIN and like SPIN it is a language for validating RDF graphs against a set of constraints.
+But SHACL additionally has some goals like user interface building and code generation \cite{knublauchshapes}.
+\subsubsection{Basic Operators}
+are mapped for each datatype individual.
+\begin{definition}[OCL to SHACL Transformation of basic Operators]
+    \begin{align*}
+        \sigma_{op}\colon\textsc{OCLOperator}\times\textsc{OCLObjects} & \to\textsc{SHCALOperator} \\
+        OP_{OCL}                                                       & \mapsto OP_{SHACL}
+    \end{align*}
+\end{definition}
+Where \(OP_{OCL}\) and \(OP_{SHACL}\) have the following non trivial mapping relations in Tables \ref{SCALOP1}, \ref{SCALOP2}.
+\begin{table}[h]
+    \centering
+    \begin{tabular}{|l|l|l|l|l|l|l|l|}
+        \hline
+        \multicolumn{2}{|c|}{\textbf{Object}} & \multicolumn{2}{|    c|}{\textbf{Integer}} & \multicolumn{2}{c|}{\textbf{Real}}                                                      \\
+        \(OP_{OCL}\)                          & \(OP_{SHACL}\)                         & \(OP_{OCL}\)                       & \(OP_{SHACL}\)  & \(OP_{OCL}\)   & \(OP_{SHACL}\)  \\ \hline
+        x.oclTypeOf(c)                        & sh:datatype c                          & a.mod(b)                           &                 & a.floor()      &                 \\
+        x.oclKindOf(c)                        & sh:datatype c                          & a.abs()                            &                 & a.round()      &                 \\
+                                              &                                        & a.max(b)                           &                 & a.max(b)       &                 \\
+                                              &                                        & a.min(b)                           &                 & a.min(b)       &                 \\
+                                              &                                        & \textless{}                        & sh:minExclusive & \textless{}    & sh:minExclusive \\
+                                              &                                        & \textgreater{}                     & sh:maxExclusive & \textgreater{} & sh:maxExclusive \\
+                                              &                                        & \textless{}=                       & sh:minInclusive & \textless{}=   & sh:minInclusive \\
+                                              &                                        & \textless{}=                       & sh:minInlusive  & \textless{}=   & sh:minInclusive \\\hline
+    \end{tabular}
+    \caption{Object, Integer and Real operator mapping for SHACL}
+    \label{SCALOP1}
+    \begin{tabular}{|l|l|l|l|}
+        \hline
+        \multicolumn{2}{|c|}{\textbf{Boolean}} & \multicolumn{2}{c|}{\textbf{String}}                                                      \\
+        \(OP_{OCL}\)                           & \(OP_{SHACL}\)                       & \(OP_{OCL}\)     & \(OP_{SHACL}\)                  \\\hline
+        not a                                  & sh:not                               & a.size()         & sh:minLenght and sh:maxLenght   \\
+        a and b                                & sh:and                               & a.concat(b)      & sh:pattern: "ab"                \\
+        a or b                                 & sh:or                                & a.substring(i,j) & sh:pattern: (RegEX)             \\
+        a xor b                                & \textit{combine and/or with not}     & a.toUpper()      & sh:pattern: (RegEX)             \\
+        a implies b                            & \textit{combine and/not}             & a.toLower()      & sh:pattern: (RegEX)             \\
+                                               &                                      & a.toInteger()    & type conversation not supported \\
+                                               &                                      & a.toReal()       & type conversation not supported \\\hline
+    \end{tabular}
+    \caption{String and Boolean operator mapping for SHACL}
+    \label{SCALOP2}
+\end{table}
+\subsubsection{PrimitivTypeEXP}
+can be transfomed with \(\sigma_{PT}\) into a SHCALPropertyConstraint instance using \textit{sh:property} relation.
+\begin{definition}[PrimitivTypeEXP-Transformation]
+    \begin{align*}
+        \sigma_{PT}\colon\textsc{PrimitivTypeEXP} & \to\textsc{SHCALPropertyConstraint}                           \\
+        (n,o,v)                                   & \mapsto\text{sh:property [ sh:path n; \(\sigma_{op}\)(v,o);]} \\
+    \end{align*}
+\end{definition}
+\subsubsection{IfEXP}
+can be transformed with \(\sigma_(IF)\), the translation relation from OCLs IfEXP to SHACL equivalent.
+\begin{definition}[IfEXP-Transformation]
+    \begin{align*}
+        \sigma_{IF}\colon\textsc{IfEXP} & \to\textsc{SHACLExpression}                                     \\
+        (e_1, e_2, e_3)                 & \mapsto sh:or(sh:and(\sigma_{SHACL}(e_1),\sigma_{SHACL}(e_2)),  \\
+                                        & \qquad sh:and(sh:not(\sigma_{SHACL}(e_1)),\sigma_{SHACL}(e_3))) \\
+    \end{align*}
+\end{definition}
+\subsubsection{VariableEXP}
+are used to produce a variable addressing.
+We now define \(\sigma_{VAR}\) which transform an instance of OCL into a SHACLExpression.
+\begin{definition}[VariableEXP-Transformation]
+    \begin{align*}
+        \sigma_{VAR}\colon\textsc{VarEXP} & \to\textsc{SHACLExpression}                         \\
+        (v)                               & \mapsto'\$this'                     & ,iff v='self' \\
+                                          & \qquad v\string^\string^ xsd:string & ,else
+    \end{align*}
+\end{definition}
+\subsubsection{LetEXP}
+cannot be covered, because SHACL does not support variables at validation level.
+With sh:sparql we maybe can bypass this restriction.
+\subsubsection{CollectionLiteralEXP}
+are various expressions on collections combined in the CollectionLiteralEXP.
+They enable most of the cardinality features.
+\begin{definition}[CollectionLiteralEXP-Transformation]
+    \begin{align*}
+        \sigma_{COL}\colon\textsc{CollectionLiteralEXP} & \to\textsc{SHACLExpression} \\
+        (e_{OCL})                                       & \mapsto e_{SHACL}           \\
+    \end{align*}
+\end{definition}
+The mapping can be seen in \ref{SHACLColExp}.
+\begin{table}[h]
+    \centering
+    \begin{tabular}{|l|l|}
+        \hline
+        \textbf{e_{OCL}}          & \textbf{e_{SHACL}}                                   \\\hline
+        =                         & sh:eq                                                \\
+        \textless{}\textgreater{} & sh:not(sh:eq)                                        \\
+        size()                    & sh:and(sh:minCount, sh:maxCount)                     \\
+        includes(x)               & sh:hasValue x                                        \\
+        excludes(x)               & sh:not(sh:hasValue x)                                \\
+        count x                   & sh:sparql(SELECT COUNT(?v) AS count \{\$this x ?v\}) \\
+        includeAll(\(x_1 .. x_n\) & sh:in [\(x_1 .. x_n\)]                               \\
+        excludeAll(\(x_1 .. x_n\) & sh:noz(sh:in [\(x_1 .. x_n\)])                       \\
+        isEmpty                   & sh:eq ()                                             \\
+        notEmpty                  & sh:not(sh:eq ())                                     \\
+        max x                     & sh:sparql(SELECT MAX(?v) AS max \{\$this x ?v\})     \\
+        min x                     & sh:sparql(SELECT MIN(?v) AS min \{\$this x ?v\})     \\
+        sum x                     & sh:sparql(SELECT SUM(?v) AS sum \{\$this x ?v\})     \\
+        product                   & ERROR                                                \\
+        selectByKind(c)           & sh:sparql(SELECT ?s \{?s rdfs:subClassOf* ?c\})      \\
+        selectByType(c)           & sh:sparql(SELECT ?s \{?s rdf:type ?c\})              \\
+        flattern                  & ERROR                                                \\\hline
+    \end{tabular}
+    \label{SHACLColExp}
+    \caption{OCL Collection based operation to SHACL}
+\end{table}
+\subsubsection{OCLExpression translation}
+combine \(\sigma_{SHACL}\) and get a translation function which covers nearby every OCLExpression we allowed in Section \ref{OCLINVSubSet}.
+\begin{definition}[OCL to SHACL translation]
+    \begin{align*}
+        \sigma_{SHACL}\colon\textsc{OCLExpression} & \to\textsc{SPINExpression} \\
+        \sigma_{SHACL}(e)                          & \mapsto
+        \begin{cases}
+            \sigma_{IF}(e)  & , e \in \textsc{IfExpression}           \\
+            \sigma_{Let}(e) & , e \in \textsc{LetExpression}          \\
+            \sigma_{PT}(e)  & , e \in \textsc{PrimitivTypeExpression} \\
+            \sigma_{Col}(e) & , e \in \textsc{CollectionLiteralEXP}
+        \end{cases}
+    \end{align*}
+    \label{OCLtoSHACL}
+\end{definition}
+% #################################################################################################################
+% ################################################### ShEx ########################################################
+% #################################################################################################################
+\subsection{Translation from OCL to ShEx}
+ShEx is very different from the other two approaches, it follows a more structure orientated idea\cite{shex112018}.
+It is meant to be used for APIs and UIs.
+
+We will give the JSON notation of ShEx because it is the shortest and most common notation.
+\subsubsection{CollectionLiteralExp}
+can be translated to whether all or specific elements within this collection match a defined shape.
+So, a collection validation is a validation of all outgoing arc with the given property, which is covered by \(\sigma_{PL}\).
+\subsubsection{IfEXP}
+are used for conditional validation.
+This feature can be archived with ShEx \textit{ShapeAnd} and \textit{ShapeOr} statements.
+\begin{definition}[IfEXP to ShEx Transformation]
+    \begin{align*}
+        \sigma_{IF}\colon\textsc{IfEXP} & \to\textsc{ShExShape}                                                      \\
+        (e_1, e_2, _3)                  & \mapsto\{"type"\colon"ShapeOr","shapeExprs"\colon[                         \\
+                                        & \qquad\{"type"\colon"ShapeAnd","shapeExprs"\colon[                         \\
+                                        & \qquad\quad\sigma_{ShEx}(e_1),\sigma_{ShEx}(e_2)]\},                       \\
+                                        & \qquad\{"type"\colon"ShapeAnd","shapeExprs"\colon[                         \\
+                                        & \qquad\qquad\{"type"\colon"ShapeNot","shapeExpr"\colon\sigma_{ShEx}(e_1)\} \\
+                                        & \qquad\qquad\sigma_{ShEx}(e_2)]\}]\}                                       \\
+    \end{align*}
+\end{definition}
+\subsubsection{PrimitivTypeEXP}
+are the main magic for ShEx translation.
+But not all features are supported with the current ShEx version.
+To enable the basic features we map numericals to ShEx \textit{Numeric} datatype and other to \textit{String} datatype.
+\begin{definition}[PrimitivTypeEXP to ShEx Transformation]
+    \begin{align*}
+        \sigma_{PL}\colon\textsc{PrimitivTypeEXP} & \to\textsc{ShExShape}                           \\
+        (n,o,v)                                   & \mapsto\{"type"\colon"tripleConstraint",        \\
+                                                  & \qquad\quad"predicate"\colon n,                 \\
+                                                  & \qquad\quad "valueExpr"\colon\sigma_{op}(o,v)\}
+    \end{align*}
+\end{definition}
+\subsubsection{Basic Operator}
+are not fully mappable to ShEx, here we only give the few possibilities.
+\begin{definition}[OCL to ShEx Transformation of basic Operators] % redefine mapping to show only the NOT NodeConstainted part?
+    \begin{align*}
+        \sigma_{op}\colon\textsc{OCLOperator}\times\textsc{OCLObjects} & \to\textsc{ShExNodeCinstrint}                                       \\
+        (=,v)                                                          & \mapsto\{"type"\colon"nodeConstraint","values"\colon[\{"value"\colon v\}]\}                               \\
+        (<>,v)                                                         & \mapsto\{"type"\colon"ShapeNot","shapeExpr"\colon\sigma_{op}(=,v)\} \\
+        (.size()=,v)                                                   & \mapsto\{"type"\colon"nodeConstraint","lenght"\colon v\}            \\
+        (.size()<,v)                                                   & \mapsto\{"type"\colon"nodeConstraint","minLenght"\colon v\}         \\
+        (.size()>,v)                                                   & \mapsto\{"type"\colon"nodeConstraint","maxLenght"\colon v\}         \\
+        (.size()<=,v)                                                  & \mapsto\sigma_{op}(.size()<, v+1)                                   \\
+        (.size()>=,v)                                                  & \mapsto\sigma_{op}(.size()>, v-1)                                   \\
+        (>,v)                                                          & \mapsto\{"type"\colon"nodeConstraint","maxexlusive"\colon v\}       \\
+        (<,v)                                                          & \mapsto\{"type"\colon"nodeConstraint","minxlusive"\colon v\}        \\
+        (>=,v)                                                         & \mapsto\{"type"\colon"nodeConstraint","maxinclusive"\colon v\}      \\
+        (<=,v)                                                         & \mapsto\{"type"\colon"nodeConstraint","maxinclusive"\colon v\}      \\
+        (o,v)                                                          & \mapsto\epsilon
+    \end{align*}
+\end{definition}
+\subsubsection{VarEXP}
+are handled with \(\sigma_{PL}\), because ShEx does not provide any kind of this or self-structure.
+All rules are handled with an indirect assignment of this/self.
+\subsubsection{LetEXP}
+are used to declare a variable for later use.
+Variables are not supported by ShEx, therefore all let-statements must force an error.
+\subsubsection{OCLExpression translation}
+are now defined \(\sigma_{ShEx}\) as combination of the translation relations given in this section.
+\begin{definition}[OCL to ShEx translation]
+    \begin{align*}
+        \sigma_{SPIN}\colon\textsc{OCLExpression} & \to\textsc{SPINExpression} \\
+        \sigma_{SPIN}(e)                          & \mapsto
+        \begin{cases}
+            \sigma_{IF}(e) & \quad , e \in \textsc{IfExpression}           \\
+            \sigma_{PT}(e) & \quad , e \in \textsc{PrimitivTypeExpression}
+        \end{cases}
+    \end{align*}
+    \label{OCLtoShEx}
+\end{definition}
+% #################################################################################################################
+% ###################################################### Conlusion ################################################
+% #################################################################################################################
+\section{Comparision of the approaches}
+We have seen that it is possible to translate a \(e\in\textsc{OCLExpression}\) to Spin, SHACL or ShEx by applying their translation relation.
+But the different approaches have different complexities and coverages of OCL features.
+
+\subsection{Coverate of validation features}
+\label{coverageSec}
+We can see that SPIN and SHACL are very similar at coverage.
+But it still misses two collection expression, as seen in Table (\ref{SHACLColExp}).
+In Table \ref{coverage} the feature coverage of the approaches is compared.
+One can see that basic structural validation is possible with all approaches, but the ability to validate the values is missing in ShEx.
+\begin{table}[h]
+    \centering
+    \begin{tabular}{|l|c|c|c|}
+        \hline
+        \textbf{OCLFeature}           & \textbf{SPIN} & \textbf{SHACL} & \textbf{ShEx} \\
+        \hline
+        Primitiv Type Expression      & \checkmark    & \checkmark     & \checkmark    \\
+        TypeContraints                & \checkmark    & \checkmark     & \checkmark    \\
+        If Expression                 & \checkmark    & \checkmark     & \checkmark    \\
+        Variable Expression           & \checkmark    & \checkmark     & (x)           \\
+        Collection Literal Expression & (\checkmark)  & \checkmark     & (x)           \\
+        Let Expression                & (\checkmark)  & (\checkmark)   & x             \\
+        \hline
+    \end{tabular}
+    \caption{Coverate of OCl features: \checkmark-covers, x-covers not, ( )-with restriction}
+    \label{coverage}
+\end{table}
+\subsection{Human Readability}
+\label{readability}
+For the value-based validation, we can see that SPIN needs less lines for a simple length check than SHACL or even ShEx.
+With SHACL it is very clear what is checked.
+The translation into SHACL would have the most advantages.    
+
+In the case of structure validation, we can see that SPIN and SHACL grow heavily with more invariants.
+The ShEx approach is very easy to read because this is one of the ShEx goals.
+But ShEx lacks a subType feature (as SHACL) so checking a class hierarchy is impossible.
+\section{Conclusion}
+In Section \ref{OCL2RDFVal} we have seen that with an increasing amount of features the translation function is growing.
+We also have seen in Sections \ref{coverageSec} and \ref{readability} that growing feature coverage implies growing complexity.
+Currently one can see a process of losing features with newer developments.
+
+That leads us to the conclusion that we should use ShEx over SHACL as long as possible.
+If they meet their bounds the step back to SPIN is needed.
+% references
+\bibliographystyle{splncs04}
+\bibliography{KGSemBib}
+\end{document}

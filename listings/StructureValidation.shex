@@ -1,0 +1,4 @@
+ex:NamedObjectStructure {
+    ex:NamedObject.name xsd::name;
+    ex:NamedObject.age xsd::integer
+}

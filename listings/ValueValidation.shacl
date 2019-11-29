@@ -1,0 +1,3 @@
+sh:NamedObjectShape a sh:NodeShape;
+  sh:targetClass ex:NamedObject;
+  sh:property [ sh:path name, sh:maxLenght: 32 ].

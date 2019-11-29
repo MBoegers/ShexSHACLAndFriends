@@ -1,0 +1,10 @@
+ex:NamedObjectStruct a sh:NodeShape ;
+	sh:targetClass NamedObject
+	sh:property [
+		sh:path ex:NamedObject.name ;
+		sh:datatype xsd::string ;
+	];
+	sh:property [
+		sh:path ex:NamedObject.name ;
+		sh:datatype xsd::integer ;
+	].

@@ -1,0 +1,8 @@
+{
+    "type": "tripleConstraint",
+    "predicate": "name",
+    "valueExpr": {
+        "type": "nodeConstraint",
+        "lenght": 32
+    }
+}
