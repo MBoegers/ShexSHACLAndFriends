@@ -1,3 +1,10 @@
+## example files
+example/.gradle
+example/.idea
+example/gradle
+example/build
+example/src/main/resources/cgmes/
+
 ## Core latex/pdflatex auxiliary files:
 *.aux
 *.lof
@@ -237,6 +244,3 @@ TSWLatexianTemp*
 
 # standalone packages
 *.sta
-
-# generated if using elsarticle.cls
-*.spl

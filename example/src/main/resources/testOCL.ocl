@@ -1,0 +1,10 @@
+context IEC61970::Base::DC::DCShunt
+-- capacitance must be set.
+-- Capacitance of the DC shunt.
+inv DCShunt_capacitance: (self.capacitance <> null)
+-- ratedUdc must be set.
+-- Rated DC device voltage. Converter configuration data used in power flow.
+inv DCShunt_ratedUdc: (self.ratedUdc <> null)
+-- resistance must be set.
+-- Resistance of the DC device.
+inv DCShunt_resistance: (self.resistance <> null)
